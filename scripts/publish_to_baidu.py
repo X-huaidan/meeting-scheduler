@@ -19,6 +19,15 @@ publish_to_baidu.py
   python publish_to_baidu.py              # 检测更新并按需发布
   python publish_to_baidu.py --force      # 强制重新发布（即使 hash 没变）
   python publish_to_baidu.py --status     # 只看当前/上次发布状态
+  python publish_to_baidu.py --hash-only  # 只输出当前 hash
+  python publish_to_baidu.py --show-draft # 只显示 CHANGELOG.md 的"待发布"段
+
+发版流程在 agent 进程里完成（参见 SKILL.md "版本管理与自动发布"）：
+1. agent 用 Edit 工具把 references/CHANGELOG.md 的"待发布"段合并到"已发布"段
+   （给本次发版指定版本号、清空"待发布"段）
+2. agent 用 Edit 工具 bump SKILL.md frontmatter 的 version（自动 +1 次版本）
+3. git add . && git commit -m 'vX.Y.Z: ...' && git push
+4. 调本脚本打包并同步到百度网盘
 
 依赖：
   - Python 3.10+ (仅标准库)
@@ -49,6 +58,7 @@ from pathlib import Path
 SKILL_DIR = Path(r"C:\Users\changan\.workbuddy\skills\meeting-scheduler")
 OUTPUT_DIR = Path(r"D:\WorkBuddy\2026-09-11-08-46-35\outputs")
 STATE_FILE = SKILL_DIR / ".last_publish.json"
+CHANGELOG_FILE = SKILL_DIR / "references" / "CHANGELOG.md"
 PACKAGER = Path(
     r"D:\SOFT\WorkBuddy\resources\app.asar.unpacked\resources\plugins"
     r"\workbuddy-builtin\skills\skill-creator\scripts\package_skill.py"
@@ -80,6 +90,37 @@ def content_hash() -> str:
             h.update(str(p.relative_to(SKILL_DIR)).encode("utf-8"))
             h.update(p.read_bytes())
     return h.hexdigest()[:12]
+
+
+def read_draft() -> str:
+    """
+    从 references/CHANGELOG.md 提取 <!-- draft:start --> 和 <!-- draft:end --> 之间的内容。
+    返回去除首尾空白的草稿文本。如果没有标记，返回空字符串。
+    """
+    if not CHANGELOG_FILE.exists():
+        return ""
+    text = CHANGELOG_FILE.read_text(encoding="utf-8")
+    m = re.search(
+        r"<!--\s*draft:start\s*-->\s*\n(.*?)\n\s*<!--\s*draft:end\s*-->",
+        text,
+        re.DOTALL,
+    )
+    if not m:
+        return ""
+    return m.group(1).strip()
+
+
+def bump_minor_version(version: str) -> str:
+    """
+    把版本号 +1 次版本号：vX.Y.Z → vX.(Y+1).0
+    例：v1.1.0 → v1.2.0、v1.9.5 → v1.10.0
+    主版本和修订号清零。
+    """
+    m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", version)
+    if not m:
+        raise ValueError(f"版本号格式不对: {version}（应为 X.Y.Z）")
+    major, minor, _ = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return f"{major}.{minor + 1}.0"
 
 
 def load_state() -> dict:
@@ -177,6 +218,10 @@ def main():
     ap.add_argument("--force", action="store_true", help="强制重新发布（hash 相同也跑）")
     ap.add_argument("--status", action="store_true", help="只显示状态")
     ap.add_argument("--hash-only", action="store_true", help="只输出当前 hash")
+    ap.add_argument("--show-draft", action="store_true",
+                    help="只显示 references/CHANGELOG.md 的'待发布'段（草稿）")
+    ap.add_argument("--bump-preview", action="store_true",
+                    help="预览 bump 后的版本号（+1 次版本号），不真改文件")
     args = ap.parse_args()
 
     if not SKILL_DIR.exists():
@@ -193,6 +238,25 @@ def main():
         print(cur_hash)
         return
 
+    if args.show_draft:
+        draft = read_draft()
+        if not draft:
+            print("✅ CHANGELOG.md 的'待发布'段为空（无草稿）")
+        else:
+            print(f"📝 待发布草稿（{name} v{version} 之后）:")
+            print()
+            print(draft)
+        return
+
+    if args.bump_preview:
+        try:
+            new_v = bump_minor_version(version)
+            print(f"当前 v{version} → 发版后 v{new_v}")
+        except ValueError as e:
+            print(f"❌ {e}")
+            sys.exit(1)
+        return
+
     state = load_state()
     last_hash = state.get("hash")
     last_version = state.get("version")
@@ -201,6 +265,14 @@ def main():
     print(f"   当前 hash: {cur_hash}")
     print(f"   上次发布: v{last_version or '?'}  hash={last_hash or '?'}")
     print(f"   目标网盘: {BAIDU_TARGET_DIR}/")
+
+    # 草稿预览（不是状态查询时也打印一下，方便 agent 知道要不要发版）
+    draft = read_draft()
+    if draft:
+        draft_lines = len([l for l in draft.splitlines() if l.strip()])
+        print(f"   📝 待发布草稿: {draft_lines} 行（用 --show-draft 查看）")
+    else:
+        print(f"   📝 待发布草稿: 空")
 
     if args.status:
         return

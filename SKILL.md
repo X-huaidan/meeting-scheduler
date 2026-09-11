@@ -1,7 +1,7 @@
 ---
 name: meeting-scheduler
 version: 1.1.0
-description: 孟总会议行程表（腾讯文档在线表格 docs.qq.com/sheet/DT3Z4cGNQZmVpU2xV，子表"时间表"）的排会与排版技能，中文别名"孟总会务助手"。当用户要求把会议信息（文字或截图）写入该行程表、调整会议行底色/对齐/换行、隐藏或展开每天的行（Ctrl+Alt+9 隐藏行 / Alt+Shift+9 取消隐藏）、按"每天只显示有会议的行"整理版面、展示或修改排会规则（references/rules.md）、展示或修改功能清单（references/features.md）时使用。也适用于任何需要在腾讯在线表格中精确模拟 UI 操作（CDP 接管 Chrome）的场景。
+description: 孟总会议行程表（腾讯文档在线表格 docs.qq.com/sheet/DT3Z4cGNQZmVpU2xV，子表"时间表"）的排会与排版技能，中文别名"孟总会务助手"。当用户要求把会议信息（文字或截图）写入该行程表、调整会议行底色/对齐/换行、隐藏或展开每天的行（Ctrl+Alt+9 隐藏行 / Alt+Shift+9 取消隐藏）、按"每天只显示有会议的行"整理版面、展示或修改排会规则（references/rules.md）、展示或修改功能清单（references/features.md）、展示更新日志（references/CHANGELOG.md）、手动触发发版（"更新上传/打包上传"）时使用。也适用于任何需要在腾讯在线表格中精确模拟 UI 操作（CDP 接管 Chrome）的场景。
 agent_created: true
 ---
 
@@ -25,8 +25,10 @@ agent_created: true
 - 提供会议截图或文字，要求写入
 - "展示排会规则 / 看看规则 / 显示规则" → 读取并展示 `references/rules.md`
 - "展示功能 / 看看功能 / 功能清单 / 这个技能能干啥" → 读取并展示 `references/features.md`
-- "增加/删除一条规则" → 编辑 `references/rules.md`
-- "增加/删除一个功能" → 编辑 `references/features.md`
+- "展示更新日志 / 看更新日志 / 看变更历史 / 变更记录" → 读取并展示 `references/CHANGELOG.md`
+- "增加/删除一条规则" → 编辑 `references/rules.md`（**仅修改文档 + 追加 CHANGELOG 草稿，不触发发版**）
+- "增加/删除一个功能" → 编辑 `references/features.md`（**仅修改文档 + 追加 CHANGELOG 草稿，不触发发版**）
+- "**更新上传 / 打包上传 / 上传到网盘**" → 手动触发发版：把 CHANGELOG 草稿合并到已发布段、打包 zip、push 到 GitHub
 
 > **规则与功能的权威来源是 `references/rules.md` 和 `references/features.md` 两份文档。** 本文件正文里残留的"排版规则/注意事项"章节是历史快照，权威解释以这两份文档为准。如果发现两份内容不一致，**以 references 目录下的为准**，并通知用户同步更新本文件。
 
@@ -229,7 +231,7 @@ console.log(out.join('\n'));
 
 **展示**：用户说"展示排会规则 / 看看规则 / 显示规则" → **完整 Read 并显示** `references/rules.md` 全文（不要总结、不要精简）
 
-**修改**：用户说"加规则/删规则/改规则" → 引导用户说出具体内容 → Edit `references/rules.md` 对应章节
+**修改**：用户说"加规则/删规则/改规则" → 引导用户说出具体内容 → Edit `references/rules.md` 对应章节 → **追加一行到 `references/CHANGELOG.md` 的"待发布"段（草稿）**。**不会触发发版。**
 
 ### `references/features.md` — 功能清单
 
@@ -239,7 +241,7 @@ console.log(out.join('\n'));
 
 **展示**：用户说"展示功能 / 看看功能 / 功能清单" → **完整 Read 并显示** `references/features.md` 全文
 
-**修改**：用户说"加功能/删功能" → 引导用户说出具体内容 → Edit `references/features.md` 对应章节
+**修改**：用户说"加功能/删功能" → 引导用户说出具体内容 → Edit `references/features.md` 对应章节 → **追加一行到 `references/CHANGELOG.md` 的"待发布"段（草稿）**。**不会触发发版。**
 
 ### 为什么分离到独立文档
 
@@ -247,6 +249,7 @@ console.log(out.join('\n'));
 2. **易查阅**：用户能直接 cat 文件，不依赖 agent
 3. **权威唯一**：避免 SKILL.md 正文与外部文档不一致
 4. **可共享**：规则文档可以单独发给其他人 review
+5. **编辑/发版解耦**：加规则不立刻发版，避免每次微调都刷一版（详见"版本管理与自动发布"）
 
 ---
 
@@ -260,7 +263,15 @@ console.log(out.join('\n'));
 
 ---
 
-## 版本管理与自动发布到百度网盘
+## 版本管理与自动发布
+
+### 核心理念：编辑即时落盘，发版批量进行
+
+- **改文档**（加/删规则、加/删功能、修 SKILL.md）→ **立即落盘 + 追加 CHANGELOG "待发布"草稿**——**不发版、不 push**
+- **发版**（打包 + push + 同步网盘）→ **只在两个条件触发时才执行**：
+  - 条件 A：用户说"**更新上传 / 打包上传 / 上传到网盘**"（手动触发，立即跑）
+  - 条件 B：每天 23:59 的 automation 定时跑一次（自动触发，无变化则跳过）
+- 这样避免每次微调都刷一版，但累积到一定量又能集中发版
 
 ### 版本号约定
 
@@ -271,35 +282,78 @@ console.log(out.join('\n'));
   - **Z 修订**（v1.0.0→v1.0.1）：改错别字、补充注释、调整示例
   - **Y 次版本**（v1.0→v1.1）：加新功能、新快捷键、新规则
   - **X 主版本**（v1→v2）：表格结构变化、通道变化、整体重构
+- 工作区 `version` 字段 = **当前正在工作的版本号（= 上次发版的版本号）**
+- 发版流程：**用当前 version commit + push → bump 到 +1 次版本号**（agent 自动；主版本需要手动改）
 
-### 发布触发
+### `references/CHANGELOG.md` — 更新日志
 
-**自动触发（每天 23:59）：**
-- WorkBuddy automation 定时跑 `scripts/publish_to_baidu.py`
-- 脚本计算技能目录 SHA1，与 `.last_publish.json` 里的 hash 对比
-- 若有变化 → 走完整发布；无变化 → 跳过
+- 分两段：**"已发布"**（按版本倒序） + **"待发布（草稿）"**（按时间顺序）
+- 加/删规则/功能时，agent 自动追加一行到"待发布"段
+- 发版时 agent 自动把"待发布"段合并到"已发布"段（给本次发版指定一个版本号）、清空"待发布"段、commit + push
+- 用户说"展示更新日志 / 看更新日志" → 完整 Read 并显示本文档
 
-**手动触发（用户说"打包上传 / 打包发到网盘 / 上传到网盘"）：**
-- agent 立即调 `scripts/publish_to_baidu.py --force` 跑一次
+**追加草稿条目格式**（agent 自动生成）：
 
-### 发布链路（5 步）
-
-```
-1. 计算 content hash
-   └─ 变化？─否─→ 跳过退出
-2. 调 package_skill.py → outputs/meeting-scheduler.zip
-3. 调 workbuddy_sites_deploy 部署到 EdgeOne Pages 拿公网 URL
-   └─ EdgeOne 沙箱是临时的，必须在同一回合内转存到网盘
-4. 调 mcp__baidu-netdisk__file_upload_by_url
-   └─ url=<EdgeOne URL>  save_path=/软件/WorkBuddy  file_name=vX.Y.Z_YYYYMMDD.zip
-5. 调 mcp__baidu-netdisk__file_upload_by_content 覆盖 /软件/WorkBuddy/CHANGELOG.md
-   └─ 内容 = 旧日志（如果存在）+ 本次新条目
-最后写本地 .last_publish.json 记录本次 hash/version/date
+```markdown
+- **YYYY-MM-DD HH:MM** | 变更简述
+  - 详细点 1
+  - 详细点 2
 ```
 
-### 跨设备使用
+**合并草稿到已发布**（发版时 agent 自动执行）：
 
-- 家里的电脑打开百度网盘客户端 → `/软件/WorkBuddy/`
-- 下载 `meeting-scheduler-vX.Y.Z_YYYYMMDD.zip`
-- WorkBuddy 客户端 → 技能 → 右上角 + → "上传第三方 Skill（zip）" → 选这个 zip → 安装
-- 新版本发布后 CHANGELOG.md 会显示变更摘要，便于判断要不要更新
+```markdown
+### vX.Y.Z (YYYY-MM-DD)
+- (草稿合并后的条目...)
+```
+
+### 发版触发详解
+
+**触发 A：用户手动说"更新上传"等触发词**
+
+- agent 立即执行：
+  1. 把 CHANGELOG "待发布"段所有条目合并成新的"### v1.2.0 (今天)"段，插入到"已发布"段顶部
+  2. 清空"待发布"段（保留 `<!-- draft:start/end -->` 标记）
+  3. `git add . && git commit -m 'v1.2.0: <变更摘要>' && git push`（**注意此时 SKILL.md frontmatter 还是 v1.2.0**）
+  4. bump SKILL.md frontmatter `version` 为下一个待发版号（自动 +1 次版本，即 1.3.0）
+  5. 调 `scripts/publish_to_baidu.py --force` 同步到百度网盘
+  6. 告诉用户"已发版 v1.2.0，包含以下变更：..."
+
+**触发 B：每天 23:59 automation 定时跑**
+
+- WorkBuddy automation 调 `scripts/publish_to_baidu.py`
+- 脚本行为：
+  - 先检测技能目录 hash 是否变化
+  - 若**无变化** → 直接跳过（exit 0）
+  - 若**有变化** → 执行与触发 A 相同的 6 步流程
+- "待发布"段为空时不需要合并（自然跳过）
+
+### 发版链路（完整 6 步）
+
+```
+1. 合并 CHANGELOG 草稿（如果"待发布"段非空）
+   └─ 把草稿条目打包成 ### vX.Y.Z (date) 段
+   └─ 插入到"已发布"段顶部
+   └─ 清空"待发布"段
+2. git add . && git commit -m 'vX.Y.Z: <变更摘要>' && git push
+   └─ 此时 SKILL.md frontmatter 仍是 vX.Y.Z（已发版的版本号）
+3. bump SKILL.md frontmatter version 为 X.(Y+1).0（为下次发版准备）
+4. 调 package_skill.py → outputs/meeting-scheduler.zip
+5. （可选）部署到 EdgeOne Pages 拿公网 URL → 百度网盘 URL 转存
+6. 写本地 .last_publish.json 记录本次 hash/version/date
+```
+
+### 跨设备使用（git 同步）
+
+- **公司电脑**（我这边）：发版时自动 push 到 https://github.com/X-huaidan/meeting-scheduler
+- **家里电脑**：打开 Git Bash 执行 `cd ~/.workbuddy/skills/meeting-scheduler && git pull` 即可拉取新版
+- **百度网盘**（辅助渠道）：`/软件/WorkBuddy/` 目录里也有 zip 副本，家里电脑没装 git 也能下载安装
+
+### 工具脚本
+
+- `scripts/publish_to_baidu.py` — 发版主脚本
+  - `--status` 查看当前/上次发布状态
+  - `--hash-only` 只输出当前 hash
+  - `--show-draft` 显示 CHANGELOG 当前"待发布"段（确认待发内容）
+  - `--force` 强制发版（即使 hash 没变）
+  - 不带参数 → 自动检测：有变化才发，无变化跳过
