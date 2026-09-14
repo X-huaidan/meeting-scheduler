@@ -1,6 +1,6 @@
 ---
 name: meeting-scheduler
-version: 1.4.0
+version: 1.5.0
 description: 孟总会议行程表（腾讯文档在线表格 docs.qq.com/sheet/DT3Z4cGNQZmVpU2xV，子表"时间表"）的排会与排版技能，中文别名"孟总会务助手"。当用户要求把会议信息（文字或截图）写入该行程表、调整会议行底色/对齐/换行、隐藏或展开每天的行（Ctrl+Alt+9 隐藏行 / Alt+Shift+9 取消隐藏）、按"每天只显示有会议的行"整理版面、展示或修改排会规则（references/rules.md）、展示或修改功能清单（references/features.md）、展示更新日志（references/CHANGELOG.md）、手动触发发版（"更新上传/打包上传"）时使用。也适用于任何需要在腾讯在线表格中精确模拟 UI 操作（CDP 接管 Chrome）的场景。
 agent_created: true
 ---
@@ -54,9 +54,9 @@ agent_created: true
 读活动单元格用 `document.querySelector('.bar-label').value`（返回如 `A40`）。
 （细节见 `references/cdp_notes.md` 第 3 节。）
 
-> ⚠️ **2026-09-14 更正**：旧版文档写「canvas 收不到键盘事件、不要再用 `Alt+Shift+9`」是**错的**。
-> 当时用的是 `Input.dispatchKeyEvent` 的 `keyDown` 类型；改用 **`rawKeyDown`** 后键盘完全可用。
-> 现在隐藏/展开**一律优先用键盘**，不要走右键菜单。
+> ⚠️ **2026-09-14 更正**：旧文档「canvas 收不到键盘事件、别用 `Alt+Shift+9`」是**错的** ——
+> 病因是 `Input.dispatchKeyEvent` 用了 `keyDown`，改用 **`rawKeyDown`** 后键盘完全可用。
+> 隐藏/展开**一律优先走键盘**，不要走右键菜单。
 
 ### ⚠️ 改样式前必读：`set_cell_style` 是全量覆盖
 
@@ -157,34 +157,28 @@ agent_created: true
 
 | 通道 | 能力 | 局限 |
 |---|---|---|
-| **A. MCP sandbox**（`sheet.operation_sheet`） | 读写单元格值、底色、对齐、换行、行高 | **不能隐藏行**；不能判断某行是否被隐藏 |
-| **B. CDP 接管 Chrome**（键盘链路） | 隐藏行 / 取消隐藏 / 选中整行 / 判断隐藏状态 | 需要带调试端口的 Chrome（`_hold.py` 常驻） |
+| **A. MCP sandbox**（`sheet.operation_sheet`） | 读值/结构、写值、写样式、行高列宽、合并 | **不能隐藏行**；不能判断某行是否隐藏；**样式读取只对第 1 行有效**（其余恒返回 `#000000`）；无 `copyTo`/`clearContent` |
+| **B. CDP 接管 Chrome**（键盘链路） | 隐藏行 / 取消隐藏 / 判断隐藏状态 / **截图 + 像素校验** | 需要带调试端口的 Chrome（`_hold.py` 常驻） |
 
-**结论：写数据用 A，隐藏行用 B（走键盘链路）。**
+**结论：写数据用 A；隐藏行、以及一切样式校验用 B（走键盘链路）。**
+> ⚠️ **永远不要用沙箱回读底色来判断"样式有没有丢"** —— 第 2 行起恒返回 `#000000`，
+> 既不能证明保留也不能证明丢失。2026-09-11 整表被清、09-14 表头格式被抹，两次事故当场漏掉就是这个原因。
+> 能力对照表 + 可直接抄的 JS 片段：**`references/api_caps.md`**；通道 B 细节：`references/cdp_notes.md`。
 **性能常识**：键盘 `~30ms/次`、鼠标 `~1.7s/次`、**鼠标滚轮 40s 直接超时**（canvas 无滚动容器）
 → **能走键盘就别走鼠标**。
-> 完整用法、坐标、脚本清单、踩坑清单 **全在 `references/cdp_notes.md`**，动手前读它。
 
 ---
 
 ## 标准工作流
 
-**1. 读取结构（每次必做）** — 先读 `rules.md`（至少 A.11/A.12 + 相关 B 章节），再用通道 A 分批读 B~I 列 + 行高：
-
-```javascript
-var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('时间表');
-var out = [];
-for (var r = START; r <= END; r++) {          // 每次 20 行，过长会被截断
-  var vals = [];
-  for (var col = 2; col <= 9; col++) vals.push(sh.getRange(r, col).getValue());
-  out.push(r + '|' + vals.join('|') + '|h=' + sh.getRowHeight(r));
-}
-console.log(out.join('\n'));
-```
+**1. 读取结构（每次必做）** — 先读 `rules.md`（至少 A.11/A.12 + 相关 B 章节），
+再用通道 A 分批读 B~I 列 + 行高。**JS 片段直接抄 `api_caps.md` 第 5 节，不要重写。**
 
 **2. 识别与预览** — 截图需识别：时间、会议名称、议程、地点、参会领导、参会人员、组织人。
-按 `rules.md` B.1~B.11 推导：**这场会排不排（B.11）** → 目标日期与行号 → 底色 → 领导栏/参会人写法。
-**给用户预览，确认后再写**（时间冲突、人名拿不准 → 一律先问）。
+**截图先跑一条命令自动切片**（别手写像素扫描代码）：
+`python scripts/_png.py auto "<截图路径>" "<输出目录>" --prefix img` → 再并行 Read 产出的片段。
+按 `rules.md` B.1~B.12 推导：**这场会排不排（B.11）** → 目标日期与行号 → 底色 → 领导栏/参会人写法。
+**给用户预览，确认后再写**（仅时间冲突需问；缺时段按 B.12 直接排、人名用字不确定才问）。
 
 **3. 写入** — 单元格值用 `sheet.set_range_value`（`string_value`）或 sandbox `setValue`；
 底色/对齐/换行用 `sheet.set_cell_style`（**一次传全 7 个属性**）；写入后**回读校验**。
@@ -205,6 +199,7 @@ console.log(out.join('\n'));
 | 文件 | 装什么 |
 |---|---|
 | `references/rules.md` | **排会规则权威来源**：A 表格操作 / B 会议安排 / C 输入处理 / D 工作流 / E 用户专属 |
+| `references/api_caps.md` | **通道能力实测矩阵 + 可抄的 JS 片段**：沙箱有哪些方法、哪些读数是假的、什么任务走哪条通道 |
 | `references/cdp_notes.md` | 通道 B 操作手册：sandbox 用法、CDP 坐标、键盘链路、脚本清单、踩坑清单 |
 | `references/features.md` | **功能清单权威来源**（8 类） |
 | `references/publishing.md` | 发版与版本管理：版本号约定、发版 6 步、git 踩坑、**文档体积纪律** |
@@ -229,9 +224,10 @@ console.log(out.join('\n'));
 跨设备：家里电脑 `cd ~/.workbuddy/skills/meeting-scheduler && git pull`。
 
 **`scripts/` 脚本**（作用详见 `references/cdp_notes.md` 第 5 节）：
-`_boot.py` 入口基建 · `_hold.py` Chrome 常驻 · `_kb.py` 键盘原语 · `_rowsx.py` 行导航 ·
-`_j_do.py` **批量算子（日常主力）** · `_check.py` 版面体检 · `_pix.py` 像素校验 · `_shot.py` 截图 ·
-`cdp.py` CDP 封装 · `sheet_ui.py` / `_menu.py` / `_icons.json` UI 兜底 ·
+`_png.py` **截图自动切片（零依赖，识图主力）** · `_boot.py` 入口基建 · `_hold.py` Chrome 常驻 ·
+`_kb.py` 键盘原语 · `_rowsx.py` 行导航 ·
+`_j_do.py` **批量算子（日常主力）** · `_check.py` 版面体检 · `_pix.py` 像素校验（**需 Pillow**） ·
+`_shot.py` 截图 · `cdp.py` CDP 封装 · `sheet_ui.py` / `_menu.py` / `_icons.json` UI 兜底 ·
 `publish_to_baidu.py` 发版 · `weekly_unhide.py` / `weekly_cleanup.py` 周维护
 
 > ⚠️ **截图落盘纪律**：`_boot.snap()` 写到环境变量 `SNAP_DIR`，**不开就落在 `scripts/` 里**。
