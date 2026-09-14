@@ -8,10 +8,16 @@ Requires Chrome started with --remote-debugging-port=9222 and websocket-client i
 Key trick: suppress_origin=True avoids the 403 Origin check.
 """
 import json
+import os
 import sys
 import urllib.request
 
 import websocket
+
+# The debug port can be overridden so a *dedicated* Chrome instance (own
+# user-data-dir) can be used without colliding with the user's main browser.
+PORT = int(os.environ.get("CDP_PORT", "9222"))
+BASE = f"http://127.0.0.1:{PORT}"
 
 
 def get_page_ws(target_url_substr="docs.qq.com", exclude_substr=None):
@@ -23,7 +29,7 @@ def get_page_ws(target_url_substr="docs.qq.com", exclude_substr=None):
     """
     if exclude_substr is None:
         exclude_substr = "is_blank_or_template=blank"
-    data = json.loads(urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=5).read())
+    data = json.loads(urllib.request.urlopen(f"{BASE}/json", timeout=5).read())
     pages = [t for t in data if t.get("type") == "page" and t.get("webSocketDebuggerUrl")]
     matches = [t for t in pages if target_url_substr in t.get("url", "")]
     if not matches:

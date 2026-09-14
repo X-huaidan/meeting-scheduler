@@ -21,3 +21,6 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.bak
+
+# 运行期截图产物：_boot.snap / _j_do.snap 会把 png 写在 scripts/ 下，别提交
+scripts/*.png
