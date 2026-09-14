@@ -25,10 +25,18 @@ from cdp import get_page_ws, CDP  # noqa: E402
 CTRL, SHIFT, ALT = 2, 8, 1
 
 
-def snap(c, path):
-    r = c.send("Page.captureScreenshot", {"format": "png"})
-    open(path, "wb").write(base64.b64decode(r["result"]["data"]))
-    return path
+def snap(c, path, retries=3):
+    """Screenshot the page. Retries on CDP errors (capture can transiently fail)."""
+    last = None
+    for _ in range(retries):
+        r = c.send("Page.captureScreenshot", {"format": "png"})
+        data = (r or {}).get("result", {}).get("data")
+        if data:
+            open(path, "wb").write(base64.b64decode(data))
+            return path
+        last = r
+        time.sleep(0.6)
+    raise RuntimeError(f"screenshot failed after {retries} tries: {last}")
 
 
 def mouse_move(c, x, y):
@@ -56,10 +64,16 @@ def click(c, x, y, button="left", count=1, modifiers=0):
     time.sleep(0.15)
 
 
-def key(c, name, code, vk, modifiers=0, text=None):
-    p = {"type": "keyDown", "key": name, "code": code,
+def key(c, name, code, vk, modifiers=0, text=None, raw=False):
+    """Dispatch a key event.
+
+    Tencent Docs' canvas listens on the raw keydown path: sending type
+    "keyDown" is often ignored for shortcut chords (e.g. Alt+Shift+9), while
+    "rawKeyDown" works. Pass raw=True for shortcuts.
+    """
+    p = {"type": "rawKeyDown" if raw else "keyDown", "key": name, "code": code,
          "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk, "modifiers": modifiers}
-    if text:
+    if text and not raw:
         p["text"] = text
     c.send("Input.dispatchKeyEvent", p)
 
@@ -70,15 +84,18 @@ def key_up(c, name, code, vk, modifiers=0):
         "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk, "modifiers": modifiers})
 
 
-def chord(c, main_key, main_code, main_vk, mods):
-    """Press a modifier chord, e.g. chord(c, '9', 'Digit9', 57, CTRL|ALT)."""
+def chord(c, main_key, main_code, main_vk, mods, raw=False):
+    """Press a modifier chord, e.g. chord(c, '9', 'Digit9', 57, CTRL|ALT).
+
+    raw=True dispatches rawKeyDown (needed for Tencent Docs canvas shortcuts).
+    """
     if mods & CTRL:
-        key(c, "Control", "ControlLeft", 17, CTRL)
+        key(c, "Control", "ControlLeft", 17, CTRL, raw=raw)
     if mods & ALT:
-        key(c, "Alt", "AltLeft", 18, mods)
+        key(c, "Alt", "AltLeft", 18, mods, raw=raw)
     if mods & SHIFT:
-        key(c, "Shift", "ShiftLeft", 16, mods)
-    key(c, main_key, main_code, main_vk, mods)
+        key(c, "Shift", "ShiftLeft", 16, mods, raw=raw)
+    key(c, main_key, main_code, main_vk, mods, raw=raw)
     key_up(c, main_key, main_code, main_vk, mods)
     if mods & SHIFT:
         key_up(c, "Shift", "ShiftLeft", 16, mods & ~SHIFT)

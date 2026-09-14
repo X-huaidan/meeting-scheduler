@@ -17,6 +17,31 @@ agent_created: true
 - 子表名: `时间表`（sheet_id `000001`），另有 `时间表2`
 - 引擎: 腾讯在线表格（个人版），canvas 渲染
 
+## 🚨 安全红线（2026-09-11 全表清空事故后新增，必须遵守）
+
+**绝对禁止**在网格上发送 `Ctrl+A` 和 `Delete` 组合。
+
+- ❌ 不要用「点 Name box → `Ctrl+A` → 输入范围 → `Enter` → `Delete`」清空数据。
+  Name box 的点击经常**抢不到焦点**，`Enter` 也不一定提交范围；此时 `Ctrl+A`
+  会选中**整张子表**，紧跟的 `Delete` 会把整表清空。2026-09-11 就是这样把
+  「时间表」整表清掉的（用户发现后叫停，靠修订记录回滚）。
+- ✅ **清空数据一律走 MCP API**：`sheet.clear_range_cells(file_id, sheet_id, range)`。
+  精确、可回读校验、不依赖焦点。
+- ✅ **展开隐藏行一律走** `scripts/weekly_unhide.py`（点行号 + Shift 点行号 + 右键 +
+  DOM 定位「取消隐藏行」）。不要再用 `Alt+Shift+9`，canvas 收不到键盘事件。
+- ✅ 任何破坏性操作前：先 MCP 读一遍目标区域，把"将要清空的范围 + 当前内容摘要"
+  列给用户，等确认后再执行。
+- ✅ 每一步之后用 MCP `sheet.get_cell_data` 回读校验，而不是只看截图。
+
+**事故后已验证的关键事实**（省得下次再摸索）：
+- 网格和行号列都是 `<canvas>`；右键菜单**是 DOM**（`div.dui-menu.context-menu_contextmenu__*`）。
+- 菜单项的**可见文字不在 textContent 里**，只有右侧快捷键提示在：
+  `Ctrl+Alt+9` = 隐藏行，`Alt+Shift+9` = 取消隐藏行 → 用快捷键文本定位菜单项。
+- 「取消隐藏行」只有在**选中整行范围且跨越隐藏行**时才出现；点行号 + Shift 点行号
+  **两步必须在同一屏内**完成，中间滚动会丢掉 Shift 扩展锚点。
+- 读活动单元格用 `document.querySelector('.bar-label').value`（返回如 `A40`）。
+- 扫行号列时点击 y **避开视口最上/最下 60px**，否则会触发自动滚动、扫描数据错乱。
+
 ## 何时触发
 
 - "帮我安排会议 / 把这个会议加进行程表 / 排会"
@@ -26,9 +51,12 @@ agent_created: true
 - "展示排会规则 / 看看规则 / 显示规则" → 读取并展示 `references/rules.md`
 - "展示功能 / 看看功能 / 功能清单 / 这个技能能干啥" → 读取并展示 `references/features.md`
 - "展示更新日志 / 看更新日志 / 看变更历史 / 变更记录" → 读取并展示 `references/CHANGELOG.md`
+- "技能多大 / 技能大小 / 文件多大 / 现在多少 KB" → 调 `scripts/publish_to_baidu.py --size` 输出当前大小 + 阈值评估（不发版）
+- 发版完成后 → agent 自动输出"已发版 + 当前大小 + 效率评估"汇报（无需触发词）
 - "增加/删除一条规则" → 编辑 `references/rules.md`（**仅修改文档 + 追加 CHANGELOG 草稿，不触发发版**）
 - "增加/删除一个功能" → 编辑 `references/features.md`（**仅修改文档 + 追加 CHANGELOG 草稿，不触发发版**）
 - "**更新上传 / 打包上传 / 上传到网盘**" → 手动触发发版：把 CHANGELOG 草稿合并到已发布段、打包 zip、push 到 GitHub
+- "清理本周 / 跑一次清理 / 模拟周日清理 / 执行 8.1" → 清空本周一到周五的 C:I 会议信息 + 展开所有隐藏行（**破坏性操作，先列清单等用户确认**）
 
 > **规则与功能的权威来源是 `references/rules.md` 和 `references/features.md` 两份文档。** 本文件正文里残留的"排版规则/注意事项"章节是历史快照，权威解释以这两份文档为准。如果发现两份内容不一致，**以 references 目录下的为准**，并通知用户同步更新本文件。
 
@@ -318,6 +346,15 @@ console.log(out.join('\n'));
   4. bump SKILL.md frontmatter `version` 为下一个待发版号（自动 +1 次版本，即 1.3.0）
   5. 调 `scripts/publish_to_baidu.py --force` 同步到百度网盘
   6. 告诉用户"已发版 v1.2.0，包含以下变更：..."
+  7. **发版汇报（功能 7.7）**：调 `compute_size()` 输出当前技能大小 + 阈值评估，例：
+     ```
+     📦 已发版 v1.2.0 → 百度网盘
+     📊 技能大小：55.83 KB（9 文件）
+        - SKILL.md：16.39 KB
+        - references/：21.17 KB（4 文件）
+        - scripts/：18.09 KB（3 文件）
+     ✅ 效率评估：🟢 良好（健康到 100 KB 警戒线还有 ~44 KB 余量）
+     ```
 
 **触发 B：每天 23:59 automation 定时跑**
 

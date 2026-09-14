@@ -21,6 +21,7 @@ publish_to_baidu.py
   python publish_to_baidu.py --status     # 只看当前/上次发布状态
   python publish_to_baidu.py --hash-only  # 只输出当前 hash
   python publish_to_baidu.py --show-draft # 只显示 CHANGELOG.md 的"待发布"段
+  python publish_to_baidu.py --size        # 输出技能大小统计 + 阈值评估（不发版）
 
 发版流程在 agent 进程里完成（参见 SKILL.md "版本管理与自动发布"）：
 1. agent 用 Edit 工具把 references/CHANGELOG.md 的"待发布"段合并到"已发布"段
@@ -132,6 +133,106 @@ def load_state() -> dict:
         return {}
 
 
+# === 功能 7.7：技能大小统计 + 阈值评估 ===
+
+SIZE_THRESHOLDS = [
+    # (总大小上限 KB, SKILL.md 上限 KB, 等级, 影响)
+    (50,   16,  "🟢 健康",  "几乎无影响"),
+    (100,  30,  "🟢 良好",  "正常（当前期望区段）"),
+    (200,  60,  "🟡 警戒",  "LLM 加载变慢"),
+    (500,  100, "🟠 警告",  "拖慢首屏响应，建议拆分"),
+    (float("inf"), float("inf"), "🔴 危险", "严重卡顿，必须重构"),
+]
+
+
+def compute_size() -> dict:
+    """
+    统计技能目录所有文件（排除 .last_publish.json 和 __pycache__、.git）。
+    返回 dict：{
+      'total_bytes': int, 'file_count': int, 'skill_md_bytes': int,
+      'groups': {目录名: bytes},
+      'files': [(相对路径, bytes)]
+    }
+    """
+    skip_names = {".last_publish.json"}
+    skip_dirs = {"__pycache__", ".git", "node_modules"}
+
+    files = []
+    for p in sorted(SKILL_DIR.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(SKILL_DIR)
+        if any(part in skip_dirs for part in rel.parts):
+            continue
+        if p.name in skip_names:
+            continue
+        files.append((rel, p.stat().st_size))
+
+    groups: dict[str, int] = {}
+    skill_md_size = 0
+    for rel, sz in files:
+        parts = rel.parts
+        top = parts[0] if len(parts) > 1 else "(root)"
+        groups[top] = groups.get(top, 0) + sz
+        if rel.as_posix() == "SKILL.md":
+            skill_md_size = sz
+
+    return {
+        "total_bytes": sum(sz for _, sz in files),
+        "file_count": len(files),
+        "skill_md_bytes": skill_md_size,
+        "groups": groups,
+        "files": [(str(rel), sz) for rel, sz in files],
+    }
+
+
+def evaluate_size(stats: dict) -> tuple[str, str, int, int]:
+    """
+    返回 (等级, 影响, 距下一档余量KB, 下一档总大小KB)。
+    例：("🟢 良好", "正常（当前期望区段）", 44, 100)
+    """
+    total_kb = stats["total_bytes"] / 1024
+    skill_kb = stats["skill_md_bytes"] / 1024
+
+    cur_idx = 0
+    for i, (t, s, _, _) in enumerate(SIZE_THRESHOLDS):
+        if total_kb < t and skill_kb < s:
+            cur_idx = i
+            break
+    else:
+        cur_idx = len(SIZE_THRESHOLDS) - 1
+
+    _, _, level, impact = SIZE_THRESHOLDS[cur_idx]
+
+    if cur_idx + 1 < len(SIZE_THRESHOLDS):
+        next_total_kb = SIZE_THRESHOLDS[cur_idx + 1][0]
+        headroom = max(0, int(next_total_kb - total_kb))
+    else:
+        next_total_kb = -1
+        headroom = 0
+
+    return level, impact, headroom, int(next_total_kb) if next_total_kb > 0 else -1
+
+
+def print_size_report(stats: dict | None = None) -> None:
+    """打印技能大小汇报 + 阈值评估"""
+    if stats is None:
+        stats = compute_size()
+    level, impact, headroom, next_kb = evaluate_size(stats)
+
+    total_kb = stats["total_bytes"] / 1024
+    skill_kb = stats["skill_md_bytes"] / 1024
+
+    print(f"📊 技能大小：{total_kb:.2f} KB（{stats['file_count']} 文件）")
+    print(f"   SKILL.md：{skill_kb:.2f} KB")
+    print("   分组：")
+    for name, sz in sorted(stats["groups"].items(), key=lambda x: x[1], reverse=True):
+        print(f"     - {name:<14}  {sz/1024:>7.2f} KB")
+    print(f"✅ 效率评估：{level}（{impact}）")
+    if next_kb > 0:
+        print(f"   距下一档（{next_kb} KB）还有 ~{headroom} KB 余量")
+
+
 def save_state(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -222,6 +323,8 @@ def main():
                     help="只显示 references/CHANGELOG.md 的'待发布'段（草稿）")
     ap.add_argument("--bump-preview", action="store_true",
                     help="预览 bump 后的版本号（+1 次版本号），不真改文件")
+    ap.add_argument("--size", action="store_true",
+                    help="输出技能大小统计 + 阈值评估（不发版）")
     args = ap.parse_args()
 
     if not SKILL_DIR.exists():
@@ -255,6 +358,12 @@ def main():
         except ValueError as e:
             print(f"❌ {e}")
             sys.exit(1)
+        return
+
+    if args.size:
+        stats = compute_size()
+        print(f"📦 {name} v{version}")
+        print_size_report(stats)
         return
 
     state = load_state()

@@ -14,15 +14,27 @@ import urllib.request
 import websocket
 
 
-def get_page_ws(target_url_substr="docs.qq.com"):
+def get_page_ws(target_url_substr="docs.qq.com", exclude_substr=None):
+    """Find the target page and return its websocket URL.
+
+    Prefers an exact URL-substring match. When several pages match (e.g. the
+    user also has a blank template sheet open), skips blank/template pages and
+    blank-titled tabs so we never drive the wrong document.
+    """
+    if exclude_substr is None:
+        exclude_substr = "is_blank_or_template=blank"
     data = json.loads(urllib.request.urlopen("http://127.0.0.1:9222/json", timeout=5).read())
     pages = [t for t in data if t.get("type") == "page" and t.get("webSocketDebuggerUrl")]
-    for t in pages:
-        if target_url_substr in t.get("url", ""):
-            return t["webSocketDebuggerUrl"], t
-    if pages:
-        return pages[0]["webSocketDebuggerUrl"], pages[0]
-    return None, None
+    matches = [t for t in pages if target_url_substr in t.get("url", "")]
+    if not matches:
+        return None, None
+    # Prefer non-blank documents
+    good = [t for t in matches
+            if exclude_substr not in t.get("url", "")
+            and "空白" not in t.get("title", "")
+            and t.get("title", "").strip() not in ("", "新标签页", "New Tab")]
+    chosen = (good or matches)[0]
+    return chosen["webSocketDebuggerUrl"], chosen
 
 
 class CDP:
