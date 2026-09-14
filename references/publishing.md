@@ -77,12 +77,37 @@
    C:\Users\changan\.workbuddy\binaries\PortableGit\versions\1.2.0\cmd\git.exe
    ```
    并把 `cmd` 与 `mingw64/bin` 加进 PATH 后调用。
-2. **远端只走 SSH，HTTPS 走不通**（企业代理连 `github.com:443` 超时）：
+2. **push 前必须先探测通路——本机网络会变，SSH / HTTPS 谁通要现场测**：
    ```
-   origin  git@github.com:X-huaidan/meeting-scheduler.git
+   origin  git@github.com:X-huaidan/meeting-scheduler.git   # 默认走 SSH
    ```
    依赖 `~/.ssh/github_meeting_scheduler`（`~/.ssh/config` 里配 `IdentityFile` + `IdentitiesOnly yes`）。
-   ⚠️ **不要用 HTTPS + PAT**。
+
+   **两条探测命令（各 10 秒内出结果）**：
+   ```bash
+   # SSH 通路
+   ssh -o ConnectTimeout=15 -o BatchMode=yes -T git@github.com
+   #   通 → "Hi X-huaidan! You've successfully authenticated..."
+   #   不通 → "Connection reset by ... port 22"（KEX 前被 RST，不是密钥问题）
+
+   # HTTPS 通路（公开仓库只读，不需要凭据）
+   git ls-remote https://github.com/X-huaidan/meeting-scheduler.git HEAD
+   #   通 → 打印一串 SHA；不通 → 超时
+   ```
+
+   **实测记录（两次结论完全相反，别凭记忆）**：
+
+   | 快照 | SSH 22 | HTTPS github.com | 当时怎么推的 |
+   |---|---|---|---|
+   | 2026-09-11 | ✅ 通（走沙箱代理） | ❌ 超时 | 用 SSH，成功（v1.0.0 / v1.1.0） |
+   | 2026-09-14 18:10 | ❌ 连续 4 次 reset | ✅ 通（curl 200、ls-remote 成功） | 待定 |
+
+   **HTTPS 的硬门槛**：本机 `credential.helper=helper-selector`，但 Windows 凭据管理器里
+   **没有 github.com 条目** → `git push https://...` 会报 `could not read Username`。
+   走 HTTPS 必须先用 PAT；**新建 PAT 属于改用户账号，须先讲清楚、让用户自己动手**。
+
+   ⚠️ **别去 `cat ~/.ssh/config`**：沙箱会拦截 `~/.ssh` 读取并直接拒绝执行
+   （ssh 自己读没问题，`ssh -v` 能看到它正确载入了 key）。
 
 ---
 

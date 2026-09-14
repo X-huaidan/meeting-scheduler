@@ -222,7 +222,8 @@ console.log(out.join('\n'));
 **不发版**）→ **发版只在两条件触发**（用户说"更新上传/打包上传"，或每天 23:59 automation）→
 版本号 `X.Y.Z`（`X` 结构/通道变化 · `Y` 新功能规则 · `Z` 错别字），
 **发版 = 用当前 version commit+push → 再 bump +1 次版本**。
-⚠️ **远端只走 SSH** `git@github.com:X-huaidan/meeting-scheduler.git`（HTTPS 被代理挡，**别用 PAT**）；
+⚠️ **push 前先探测通路**：远端 `git@github.com:X-huaidan/meeting-scheduler.git`（SSH 为默认）；
+本机 SSH / HTTPS 谁通**每次要现场测**（2026-09-11 SSH 通、2026-09-14 SSH 被重置而 HTTPS 通）——
 `git` 不在默认 PATH，用 `...\PortableGit\versions\1.2.0\cmd\git.exe`。
 **发版后自动报大小 + 阈值评估（功能 7.7）；SKILL.md 单项超 30 KB 就必须拆。**
 跨设备：家里电脑 `cd ~/.workbuddy/skills/meeting-scheduler && git pull`。
