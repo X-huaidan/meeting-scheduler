@@ -20,7 +20,7 @@
 ## 1. 环境与前置条件
 
 ```
-Python: C:\Users\changan\.workbuddy\binaries\python\envs\default\Scripts\python.exe
+Python: %USERPROFILE%\.workbuddy\binaries\python\envs\default\Scripts\python.exe
         （系统 python 没有 websocket 模块，必须用这个 venv）
 依赖:   websocket-client；拼图/裁图需要 Pillow（已装，12.3.0）
 连接:   websocket.create_connection(ws_url, timeout=120, suppress_origin=True, origin=None)  # 否则 403
@@ -42,6 +42,22 @@ python scripts/_hold.py      # 用 run_in_background 启动，不要前台跑
 
 `_hold.py` 每 5 秒探活，端口死了自动重新拉起 Chrome（调试端口默认 `9223`，
 独立 profile 在 `~/.workbuddy/chrome-debug`，不污染用户日常浏览器）。
+
+### ⚠️ 在"新机器"上首次使用：必须先登录一次（2026-09-14 家里电脑实测）
+
+调试 profile 是**全新的**，与用户日常浏览器不共享 Cookie → 第一次打开表格会看到：
+
+> 🔒 **此文档已设置权限，请登录后使用。**（页面只有一个「立即登录」按钮）
+
+此时**任何 CDP 键盘操作都会作用在一个错误页面上**（键盘链路全部失效，且可能误触）。
+所以流程是：
+
+1. `python scripts/_launch_chrome.py` 启动，或直接 `_hold.py`
+2. `_boot.connect()` 后先 `snap(c, "login_check.png")` **截图确认页面状态**
+   —— 标题是 `孟总会议行程表` **不代表已登录**，权限墙页面标题同样是这个
+3. 若看到权限墙 → **请用户在那个 Chrome 窗口里点「立即登录」扫码**（微信/QQ），
+   **登录态会持久化在这个 profile 里，只需一次**
+4. 用户确认已登录后，再跑 `_j_do.py` 等键盘任务
 
 ---
 
@@ -245,7 +261,7 @@ python _j_do.py "H16-16" "H18-24" "H30-39"   # 再按清单逐段隐藏
   唯一可靠校验是**操作后重新探测可见行序列**。
 - **脚本里不要依赖 bash**：WorkBuddy 沙箱的 bash 环境异常（`ls`/`dirname`/`head`
   都 command not found，且找不到 `git`）。一律用 python 绝对路径 + 脚本文件方式，不依赖管道。
-  （顺带：`git` 要用 `C:\Users\changan\.workbuddy\binaries\PortableGit\versions\1.2.0\cmd\git.exe`）
+  （顺带：`git` 要用 `%USERPROFILE%\.workbuddy\binaries\PortableGit\versions\1.2.0\cmd\git.exe`）
 - 拼图/裁图需要 Pillow，已装在 `python/envs/default`（12.3.0）
 
 ---

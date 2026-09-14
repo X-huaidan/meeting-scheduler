@@ -22,7 +22,8 @@ for k in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy",
 PORT = int(os.environ.get("CDP_PORT", "9223"))
 # cdp.py reads CDP_PORT at *import* time, so pin it before importing.
 os.environ["CDP_PORT"] = str(PORT)
-PROFILE = r"C:\Users\changan\.workbuddy\chrome-debug"
+# 跨设备：不要写死用户名，用当前用户的 USERPROFILE 展开
+PROFILE = os.path.expandvars(r"%USERPROFILE%\.workbuddy\chrome-debug")
 URL = "https://docs.qq.com/sheet/DT3Z4cGNQZmVpU2xV?tab=000001"
 
 CANDIDATES = [

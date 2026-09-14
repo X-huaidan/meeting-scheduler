@@ -6,7 +6,8 @@ import subprocess
 import time
 import urllib.request
 
-PROFILE = r"C:\Users\changan\.workbuddy\chrome-debug"
+# 跨设备：不要写死用户名，用当前用户的 USERPROFILE 展开
+PROFILE = os.path.expandvars(r"%USERPROFILE%\.workbuddy\chrome-debug")
 PORT = 9223
 URL = "https://docs.qq.com/sheet/DT3Z4cGNQZmVpU2xV?tab=000001"
 

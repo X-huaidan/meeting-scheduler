@@ -1,6 +1,6 @@
 ---
 name: meeting-scheduler
-version: 1.3.0
+version: 1.4.0
 description: 孟总会议行程表（腾讯文档在线表格 docs.qq.com/sheet/DT3Z4cGNQZmVpU2xV，子表"时间表"）的排会与排版技能，中文别名"孟总会务助手"。当用户要求把会议信息（文字或截图）写入该行程表、调整会议行底色/对齐/换行、隐藏或展开每天的行（Ctrl+Alt+9 隐藏行 / Alt+Shift+9 取消隐藏）、按"每天只显示有会议的行"整理版面、展示或修改排会规则（references/rules.md）、展示或修改功能清单（references/features.md）、展示更新日志（references/CHANGELOG.md）、手动触发发版（"更新上传/打包上传"）时使用。也适用于任何需要在腾讯在线表格中精确模拟 UI 操作（CDP 接管 Chrome）的场景。
 agent_created: true
 ---
@@ -146,7 +146,7 @@ agent_created: true
 ### 数据源（源截图在哪，随时可复核）
 
 用户贴进来的企业微信截图会被 WorkBuddy **落盘保留**在
-**`C:\Users\changan\.workbuddy\clipboard-images\clipboard-<UTC时间戳>.jpg`**。
+**`%USERPROFILE%\.workbuddy\clipboard-images\clipboard-<UTC时间戳>.jpg`**。
 本表当前源图 = **`clipboard-2026-09-14T02-11-53-384Z-e9e13a86.jpg`（1920×1231）
 =「房总 2026/9/14–9/20 会议安排表」** → **有疑问直接重裁这张图，不要凭记忆或猜**。
 ⚠️ 该图小字只有约 8px 高，**参会人名单读不准就必须问用户**（详见 `rules.md` C.2.5）。
@@ -218,8 +218,8 @@ console.log(out.join('\n'));
 
 ## 版本管理与脚本清单
 
-**版本管理**（**完整流程见 `references/publishing.md`**）：**编辑即时落盘**（只 Edit + 追 CHANGELOG 草稿，
-**不发版**）→ **发版只在两条件触发**（用户说"更新上传/打包上传"，或每天 23:59 automation）→
+**版本管理**（**完整流程见 `references/publishing.md`**）：**编辑即时落盘**（只改文件 + 追 CHANGELOG 草稿）→
+**🚫 只有用户明确说"发版"才发**（**禁止每次改动就自动发版**；~~每天 23:59 定时自查~~ 已取消）→
 版本号 `X.Y.Z`（`X` 结构/通道变化 · `Y` 新功能规则 · `Z` 错别字），
 **发版 = 用当前 version commit+push → 再 bump +1 次版本**。
 ⚠️ **push 前先探测通路**：远端 `git@github.com:X-huaidan/meeting-scheduler.git`（SSH 为默认）；

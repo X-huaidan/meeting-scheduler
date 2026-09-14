@@ -8,7 +8,7 @@
 | file_id | `DT3Z4cGNQZmVpU2xV` |
 | 子表 | `时间表` (sheet_id `000001`)、`时间表2` |
 | Chrome 调试端口 | `9222` |
-| Python venv | `C:\Users\changan\.workbuddy\binaries\python\envs\cdp_venv` |
+| Python venv | `%USERPROFILE%\.workbuddy\binaries\python\envs\cdp_venv` |
 | 依赖 | `websocket-client` |
 | 视口参考 | 约 1092 x 711，缩放 100% |
 

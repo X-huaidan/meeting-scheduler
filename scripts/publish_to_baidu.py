@@ -56,7 +56,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-SKILL_DIR = Path(r"C:\Users\changan\.workbuddy\skills\meeting-scheduler")
+# 跨设备：由脚本自身位置反推技能目录，不写死用户名
+SKILL_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = Path(r"D:\WorkBuddy\2026-09-11-08-46-35\outputs")
 STATE_FILE = SKILL_DIR / ".last_publish.json"
 CHANGELOG_FILE = SKILL_DIR / "references" / "CHANGELOG.md"
@@ -64,7 +65,8 @@ PACKAGER = Path(
     r"D:\SOFT\WorkBuddy\resources\app.asar.unpacked\resources\plugins"
     r"\workbuddy-builtin\skills\skill-creator\scripts\package_skill.py"
 )
-PYTHON = Path(r"C:\Users\changan\.workbuddy\binaries\python\versions\3.13.12\python.exe")
+# 跨设备：Python 放在当前用户目录下，按 HOME 展开
+PYTHON = Path.home() / ".workbuddy" / "binaries" / "python" / "versions" / "3.13.12" / "python.exe"
 
 BAIDU_TARGET_DIR = "/软件/WorkBuddy"
 BAIDU_CHANGELOG = f"{BAIDU_TARGET_DIR}/CHANGELOG.md"
